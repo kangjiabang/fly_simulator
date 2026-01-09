@@ -52,13 +52,15 @@ class Grid3D:
 def astar_3d_grid(grid: Grid3D, start: Point3D, goal: Point3D) -> List[Point3D]:
     """高性能 3D A* 搜索算法"""
     if not grid.is_free(*start) or not grid.is_free(*goal):
-        print("警告: 起点或终点被障碍物占据")
-        return []
+        raise ValueError("起点或终点被障碍物占据")
 
     min_x, min_y = grid.min_x, grid.min_y
     # 动态垂直约束：限制搜索高度范围在起终点上下 20 米内，减少搜索空间
-    z_limit_min = max(0, min(start[2], goal[2]) - 20)
-    z_limit_max = min(grid.size_z - 1, max(start[2], goal[2]) + 20)
+    # z_limit_min = max(0, min(start[2], goal[2]) - 20)
+    # z_limit_max = min(grid.size_z - 1, max(start[2], goal[2]) + 20)
+
+    z_limit_min = 0
+    z_limit_max = grid.size_z - 1
 
     # 存储每个节点的最小移动代价
     g_score = np.full((grid.max_x - min_x + 1, grid.max_y - min_y + 1, grid.size_z), np.inf, dtype=np.float32)
@@ -105,6 +107,7 @@ def astar_3d_grid(grid: Grid3D, start: Point3D, goal: Point3D) -> List[Point3D]:
                 # 使用启发式函数 (Euclidean distance)，乘以 2.5 倍权重变为加权 A* 以提升搜索速度
                 h = ((nx - gx) ** 2 + (ny - gy) ** 2 + (nz - gz) ** 2) ** 0.5
                 heappush(open_set, (ng + h * 2.5, (nx, ny, nz)))
+
     return []
 
 

@@ -106,7 +106,7 @@ def plan_3d_path(
     start: LonLatAlt,
     goal: LonLatAlt,
     buildings: List[Dict],
-    grid_size: Tuple[int,int,int] = (500, 500, 100),
+    grid_size: Tuple[int,int,int] = (500, 500, 300),
     scale: float = 1.0
 ) -> List[LonLatAlt]:
     # 1. 创建局部投影

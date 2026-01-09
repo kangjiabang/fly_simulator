@@ -1,7 +1,7 @@
 import pyproj
 import numpy as np
 from shapely.geometry import box, Point as ShapelyPoint
-from core.path_planner_core import Grid3D, astar_3d_grid, smooth_path_3d
+from src.core.path_planner_core import Grid3D, astar_3d_grid, smooth_path_3d
 
 # 假设存在的外部业务模块
 from src.others.fly_path_view_batch import grid_path_to_lonlat
@@ -69,16 +69,21 @@ def plan_3d_grid_path(start_ll, goal_ll, buildings, nofly_zones, scale=1.0, safe
     g_grid = (int(round(g_enu[0] * scale)), int(round(g_enu[1] * scale)), int(goal_ll[2]))
 
     # 5. 执行路径规划与平滑
-    raw_path = astar_3d_grid(grid, s_grid, g_grid)
-    if not raw_path: return [], proj_enu
+    try:
+        raw_path = astar_3d_grid(grid, s_grid, g_grid)
+        if not raw_path: 
+            return [], proj_enu
 
-    return smooth_path_3d(raw_path, grid), proj_enu
+        return smooth_path_3d(raw_path, grid), proj_enu
+    except ValueError as e:
+        # 重新抛出异常，让上层处理
+        raise e
 
 
 if __name__ == "__main__":
     # 配置参数
-    START = (120.0078046, 30.2994905, 20)
-    GOAL = (120.0111753, 30.2899397, 30)
+    START = (120.002127, 30.284038, 40)
+    GOAL = (119.994249, 30.283932, 30)
     SCALE = 0.5  # 1格 = 2米 (1.0/0.5)
 
     # 加载数据

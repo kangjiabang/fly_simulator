@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Tuple, List, Optional
@@ -15,6 +16,7 @@ if proj_root not in sys.path:
 # Reuse existing planning code
 from src.core.planner_service import compute_flight_path
 from src.tool.BuildingManager import BuildingManager
+from src.service.load_fly_zones import get_nofly_zones
 
 
 @asynccontextmanager
@@ -99,7 +101,16 @@ def plan(request: PlanRequest):
     try:
         manager = getattr(app.state, "building_manager", None)
         out_dicts = compute_flight_path(start, goal, scale=scale, safety_dist=safety_dist, manager=manager)
+    except RuntimeError as e:
+        # 检查是否是客户端错误（起点/终点被障碍物占据）
+        error_msg = str(e)
+        if "起点或终点被障碍物占据" in error_msg:
+            raise HTTPException(status_code=400, detail=f"{error_msg}")
+        else:
+            # 其他运行时错误仍视为服务器错误
+            raise HTTPException(status_code=500, detail=f"planner error: {e}")
     except Exception as e:
+        # 未预期的异常视为服务器错误
         raise HTTPException(status_code=500, detail=f"planner error: {e}")
 
     if not out_dicts:
@@ -109,6 +120,44 @@ def plan(request: PlanRequest):
     out = [PathPoint(**p) for p in out_dicts]
 
     return PlanResponse(path=out, length=len(out))
+
+
+# Custom encoder to handle Shapely geometries
+from shapely.geometry.base import BaseGeometry
+
+class ShapelyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, BaseGeometry):
+            return {
+                "type": obj.geom_type,
+                "coordinates": obj.__geo_interface__["coordinates"]
+            }
+        return super().default(obj)
+
+
+@app.get("/nofly-zones", tags=["zones"])
+def get_nofly_zones_endpoint():
+    """获取禁飞区信息
+    
+    Returns:
+        禁飞区列表，每个禁飞区包含几何信息、最小高度、最大高度、缓冲距离和类型
+    """
+    try:
+        zones = get_nofly_zones()
+        # Convert geometries to serializable format
+        serializable_zones = []
+        for zone in zones:
+            serializable_zone = zone.copy()
+            if "geometry" in serializable_zone:
+                geom = serializable_zone["geometry"]
+                serializable_zone["geometry"] = {
+                    "type": geom.geom_type,
+                    "coordinates": geom.__geo_interface__["coordinates"]
+                }
+            serializable_zones.append(serializable_zone)
+        return {"zones": serializable_zones}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取禁飞区失败: {e}")
 
 
 if __name__ == "__main__":

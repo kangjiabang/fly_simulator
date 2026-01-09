@@ -46,8 +46,9 @@ def compute_flight_path(start: Tuple[float, float, float],
     # Run planner
     try:
         grid_path, projection = plan_3d_grid_path(start, goal, buildings, nfz, scale=scale, safety_dist=safety_dist)
-    except Exception as e:
-        raise RuntimeError(f"planner runtime error: {e}")
+    except ValueError as e:
+        # 专门处理起点或终点被障碍物占据的情况
+        raise RuntimeError(f"{str(e)}")
 
     if not grid_path:
         return []
