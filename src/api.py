@@ -13,10 +13,14 @@ proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if proj_root not in sys.path:
     sys.path.insert(0, proj_root)
 
+from src.service.load_fly_paths import get_fly_paths
+from src.core.fly_path_collision_analyse import collision_analyse
 # Reuse existing planning code
 from src.core.planner_service import compute_flight_path
 from src.tool.BuildingManager import BuildingManager
-from src.service.load_fly_zones import get_nofly_zones
+from src.service.load_nofly_zones import get_nofly_zones
+
+
 
 
 @asynccontextmanager
@@ -158,6 +162,47 @@ def get_nofly_zones_endpoint():
         return {"zones": serializable_zones}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取禁飞区失败: {e}")
+
+
+@app.get("/fly-paths", tags=["paths"])
+def get_fly_paths_endpoint():
+    """获取飞行路线信息
+    
+    Returns:
+        飞行路线列表，每条路线包含几何信息、飞行高度、速度和类型
+    """
+    try:
+        paths = get_fly_paths()
+        # Convert geometries to serializable format
+        serializable_paths = []
+        for path in paths:
+            serializable_path = path.copy()
+            if "geometry" in serializable_path:
+                geom = serializable_path["geometry"]
+                serializable_path["geometry"] = {
+                    "type": geom.geom_type,
+                    "coordinates": geom.__geo_interface__["coordinates"]
+                }
+            serializable_paths.append(serializable_path)
+        return {"paths": serializable_paths}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取飞行路线失败: {e}")
+
+
+@app.post("/collision-analysis", tags=["analysis"])
+def post_collision_analysis():
+    """分析飞行路线碰撞风险
+    
+    Returns:
+        碰撞分析结果，包含风险等级、风险路线和最近点位信息
+    """
+    try:
+        fly_paths = get_fly_paths()
+        analysis_result = collision_analyse(fly_paths)
+        
+        return analysis_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"碰撞分析失败: {e}")
 
 
 if __name__ == "__main__":

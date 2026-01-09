@@ -6,8 +6,8 @@ Each dict contains: {"lon": float, "lat": float, "alt": float, "grid": (x,y,z)}
 from typing import List, Tuple, Dict
 
 from src.tool.BuildingManager import BuildingManager
-from src.service.load_fly_zones import get_nofly_zones
-from src.core.fly_path_final import plan_3d_grid_path
+from src.service.load_nofly_zones import get_nofly_zones
+from src.core.fly_path_calculate import plan_3d_grid_path
 from src.others.fly_path_view_batch import grid_path_to_lonlat
 
 

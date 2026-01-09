@@ -5,7 +5,7 @@ from src.core.path_planner_core import Grid3D, astar_3d_grid, smooth_path_3d
 
 # 假设存在的外部业务模块
 from src.others.fly_path_view_batch import grid_path_to_lonlat
-from src.service.load_fly_zones import get_nofly_zones
+from src.service.load_nofly_zones import get_nofly_zones
 from src.tool.BuildingManager import BuildingManager
 from src.tool.plot_3d import plot_3d
 
