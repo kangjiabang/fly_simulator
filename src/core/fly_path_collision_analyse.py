@@ -1,7 +1,11 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from pyproj import Transformer
 from shapely.ops import nearest_points
+from shapely.geometry import LineString, Polygon
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 # 假设存在的外部业务模块
 from src.service.load_fly_paths import get_fly_paths
@@ -152,9 +156,9 @@ def collision_analyse(fly_paths : list[dict]):
             
             # 根据距离确定风险等级
             risk_level = ""
-            if min_distance <= 1000:
+            if min_distance <= 50:
                 risk_level = "fatal"
-            elif min_distance <= 500:
+            elif min_distance <= 100:
                 risk_level = "warn"
             else:
                 risk_level = "safe"
@@ -187,3 +191,175 @@ if __name__ == "__main__":
     
     # 可视化结果
     visualize_collision_analysis(fly_paths, result)
+
+
+def find_nearest_points_line_to_prism(line_geom, zone_geom, z_min, z_max):
+    """
+    Find nearest points between a 3D line (flight path) and a Prism (nofly zone).
+    line_geom: Shapely LineString (with Z)
+    zone_geom: Shapely Polygon (2D)
+    z_min, z_max: float
+    """
+    # 1. Find 2D nearest points
+    # p1 on line, p2 on polygon
+    p1_2d, p2_2d = nearest_points(line_geom, zone_geom)
+    
+    # 2. Get 3D point on line
+    dist_on_line = line_geom.project(p1_2d)
+    p1_3d = line_geom.interpolate(dist_on_line)
+    
+    # 3. Determine best Z for point on polygon
+    # If the path point is within [z_min, z_max], the closest point on prism has same Z (horizontal distance).
+    # If path is above/below, we clamp to z_max/z_min.
+    
+    # Note: p1_3d might not have z if the original line didn't have z, but our inputs should have z.
+    z_line = p1_3d.z if p1_3d.has_z else 0
+    
+    z_prism = max(z_min, min(z_max, z_line))
+    
+    # 4. Construct p2_3d
+    # p2_2d is a point, so it has x, y.
+    
+    nearest_point1 = (p1_3d.x, p1_3d.y, z_line)
+    nearest_point2 = (p2_2d.x, p2_2d.y, z_prism)
+    
+    # 5. Calculate distance in meters using the transformer
+    # We must operate on lat/lon/alt or projected? 
+    # The inputs to this function must be in the same coordinate system as _transformer expects or already transformed?
+    # Existing code: `calculate_distance_3d` takes (lon, lat, alt) and transforms them.
+    # `find_nearest_points_between_lines` takes line geometries. 
+    # `collision_analyse` passes `path["geometry"]`. `get_fly_paths` returns geometries in WGS84 (lon/lat)?
+    # Let's check `api.py`. `PathPoint` has lon, lat. `load_fly_paths` creates LineString from lon, lat, alt.
+    # So `line_geom` in `collision_analyse` is (Lon, Lat, Alt).
+    # `nearest_points` on (Lon, Lat) calculates distance in Degrees. This is imprecise for finding "nearest" but mostly ok locally.
+    # `calculate_distance_3d` then properly converts to meters.
+    # I will stick to this pattern: Find "probabilistic" nearest in Lat/Lon, then calculate real distance in meters.
+    
+    distance = calculate_distance_3d(nearest_point1, nearest_point2)
+    
+    return distance, nearest_point1, nearest_point2
+
+
+def analyze_nofly_zone_risk(fly_path_points, nofly_zones):
+    """
+    Analyze risk for a single flight path against all no-fly zones.
+    fly_path_points: list of dicts with lon, lat, height
+    nofly_zones: list of dicts with geometry, z_min, z_max
+    """
+    # Create LineString from path
+    coords = [(p['lon'], p['lat'], p['height']) for p in fly_path_points]
+    if not coords:
+        return {"risk_level": "unknown", "message": "No path data"}
+        
+    line_geom = LineString(coords)
+    
+    min_dist_global = float('inf')
+    closest_p1_global = None
+    closest_p2_global = None
+    risk_level_global = "safe"
+    target_zone_geom = None # For visualization
+    target_z_range = (0, 0)
+    
+    for zone in nofly_zones:
+        poly_geom = zone['geometry']
+        z_min = zone['z_min']
+        z_max = zone['z_max']
+        
+        dist, p1, p2 = find_nearest_points_line_to_prism(line_geom, poly_geom, z_min, z_max)
+        
+        if dist < min_dist_global:
+            min_dist_global = dist
+            closest_p1_global = p1
+            closest_p2_global = p2
+            target_zone_geom = poly_geom
+            target_z_range = (z_min, z_max)
+            
+    # Risk Assessment
+    if min_dist_global <= 50:
+        risk_level_global = "fatal"
+    elif min_dist_global <= 100:
+        risk_level_global = "warn"
+        
+    return {
+        "risk_level": risk_level_global,
+        "min_distance": min_dist_global,
+        "closest_points": [closest_p1_global, closest_p2_global],
+        "zone_info": {
+            "geometry": target_zone_geom,
+            "z_min": target_z_range[0],
+            "z_max": target_z_range[1]
+        }
+    }
+
+
+def visualize_nofly_zone_risk(fly_path_points, analysis_result, output_path="risk_analysis.png"):
+    """
+    Visualize the risk analysis result and save to file.
+    """
+    fig = plt.figure(figsize=(12, 9))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # 1. Plot Flight Path
+    lons = [p['lon'] for p in fly_path_points]
+    lats = [p['lat'] for p in fly_path_points]
+    alts = [p['height'] for p in fly_path_points]
+    
+    ax.plot(lons, lats, alts, label='Flight Path', color='blue', linewidth=2, marker='o', markersize=3)
+    
+    # 2. Plot No-Fly Zone (The one that caused the risk or closest one)
+    zone_info = analysis_result.get("zone_info")
+    if zone_info and zone_info.get("geometry"):
+        geom = zone_info["geometry"]
+        z_min = zone_info["z_min"]
+        z_max = zone_info["z_max"]
+        
+        # Get exterior coords
+        if geom.geom_type == 'Polygon':
+            ex_coords = list(geom.exterior.coords)
+            
+            # Create a 3D box/prism representation
+            # We can plot top and bottom faces and vertical sides
+            x_ex, y_ex = zip(*ex_coords)
+            
+            # Bottom face
+            verts_bottom = [list(zip(x_ex, y_ex, [z_min]*len(x_ex)))]
+            # Top face
+            verts_top = [list(zip(x_ex, y_ex, [z_max]*len(x_ex)))]
+            
+            # Side faces
+            verts_sides = []
+            for i in range(len(x_ex)-1):
+                # Quad defined by (x[i], y[i]), (x[i+1], y[i+1]) at z_min and z_max
+                p1 = (x_ex[i], y_ex[i], z_min)
+                p2 = (x_ex[i+1], y_ex[i+1], z_min)
+                p3 = (x_ex[i+1], y_ex[i+1], z_max)
+                p4 = (x_ex[i], y_ex[i], z_max)
+                verts_sides.append([p1, p2, p3, p4])
+                
+            # Add collection
+            all_verts = verts_bottom + verts_top + verts_sides
+            poly_collection = Poly3DCollection(all_verts, alpha=0.3, facecolors='red', edgecolors='darkred')
+            ax.add_collection3d(poly_collection)
+            
+    # 3. Plot Closest Points and Line
+    if analysis_result.get("closest_points"):
+        p1, p2 = analysis_result["closest_points"]
+        if p1 and p2:
+            ax.scatter([p1[0]], [p1[1]], [p1[2]], color='red', s=100, label='Closest Point on Path')
+            ax.scatter([p2[0]], [p2[1]], [p2[2]], color='orange', s=100, label='Closest Point on Zone')
+            
+            dist = analysis_result.get("min_distance", 0)
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], 
+                    color='red', linestyle='--', linewidth=3, label=f'Distance: {dist:.2f}m')
+
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_zlabel('Altitude')
+    risk = analysis_result.get("risk_level", "unknown")
+    ax.set_title(f'No-Fly Zone Risk Analysis: {risk.upper()}')
+    ax.legend()
+    
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close(fig)
+    return output_path

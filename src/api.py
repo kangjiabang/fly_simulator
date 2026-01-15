@@ -1,5 +1,5 @@
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Tuple, List, Optional
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,11 +14,12 @@ if proj_root not in sys.path:
     sys.path.insert(0, proj_root)
 
 from src.service.load_fly_paths import get_fly_paths
-from src.core.fly_path_collision_analyse import collision_analyse
+from src.core.fly_path_collision_analyse import collision_analyse, analyze_nofly_zone_risk, visualize_nofly_zone_risk
 # Reuse existing planning code
 from src.core.planner_service import compute_flight_path
 from src.tool.BuildingManager import BuildingManager
 from src.service.load_nofly_zones import get_nofly_zones
+from src.core.fly_risk_analyse import start_analyze_drone_risk
 
 
 
@@ -203,6 +204,171 @@ def post_collision_analysis():
         return analysis_result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"碰撞分析失败: {e}")
+
+
+class FlyPathInfo(BaseModel):
+    id: str
+    path: List[dict]
+    color: str = None
+    isMaster: bool = False
+
+
+class FlyPathResponse(BaseModel):
+    flyPathInfos: List[FlyPathInfo]
+
+class FlyPlanPathResponse(BaseModel):
+    flyPathInfo: FlyPathInfo
+
+
+@app.get("/fly-paths-by-drone", response_model=FlyPathResponse, tags=["paths"])
+def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"),include_surrounding: bool = Query( False,description="是否包含周围航线（true 时返回所有航线）")):
+    """根据无人机ID获取飞行航线信息
+    
+    Args:
+        drone_id: 无人机ID
+        
+    Returns:
+        包含航线信息的响应，格式为：
+        {
+            "flyPathInfos": [
+                {
+                    "id": 'A1',
+                    "color": 'yellow',
+                    "path": [
+                        { "lon": 119.99, "lat": 30.27, "height": 50, "time": '2025-02-01 10:00:00' },
+                        { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
+                        // 更多路径点...
+                    ],
+                    "isMaster": false,
+                }
+            ]
+        }
+        :param drone_id:
+        :param include_surrounding:
+    """
+    try:
+        # 根据drone_id返回固定的航线数据
+        fly_path_infos = []
+        
+        # 定义固定的数据集
+        fixed_paths = [
+            {
+                "id": 'A1',
+                "color": 'yellow',
+                "path": [
+                    { "lon": 119.99, "lat": 30.27, "height": 50, "time": '2025-02-01 10:00:00' },
+                    { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
+                    { "lon": 119.994, "lat": 30.274, "height": 70, "time": '2025-02-01 10:00:10' },
+                    { "lon": 119.997, "lat": 30.276, "height": 80, "time": '2025-02-01 10:00:15' },
+                    { "lon": 119.998, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
+                    { "lon": 120.0, "lat": 30.28, "height": 100, "time": '2025-02-01 10:00:25' },
+                ],
+                "isMaster": False,
+            },
+            {
+                "id": 'B2',
+                "color": 'cyan',
+                "path": [
+                    { "lon": 119.994, "lat": 30.273, "height": 50, "time": '2025-02-01 10:00:02' },
+                    { "lon": 119.9925, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:07' },
+                    { "lon": 119.995, "lat": 30.274, "height": 70, "time": '2025-02-01 10:00:09' },
+                    { "lon": 119.9975, "lat": 30.276, "height": 80, "time": '2025-02-01 10:00:12' },
+                    { "lon": 119.9988, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
+                    { "lon": 120.02, "lat": 30.283, "height": 100, "time": '2025-02-01 10:00:27' },
+                ],
+                "isMaster": False,
+            },
+            {
+                "id": 'C3',
+                "path": [
+                    { "lon": 119.98, "lat": 30.268, "height": 50, "time": '2025-02-01 09:59:58' },
+                    { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
+                    { "lon": 119.9944, "lat": 30.2745, "height": 70, "time": '2025-02-01 10:00:08' },
+                    { "lon": 119.997, "lat": 30.2764, "height": 80, "time": '2025-02-01 10:00:15' },
+                    { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20' },
+                    { "lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30' },
+                ],
+                "isMaster": True,
+            }
+        ]
+
+        # 是否返回全部航线
+        if include_surrounding:
+            fly_path_infos = [FlyPathInfo(**path_data) for path_data in fixed_paths]
+        else:
+            for path_data in fixed_paths:
+                if path_data["id"] == drone_id:
+                    fly_path_infos = [FlyPathInfo(**path_data)]
+                    break
+
+        return FlyPathResponse(flyPathInfos=fly_path_infos)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取飞行航线失败: {e}")
+
+
+@app.get("/fly-plan-paths-by-drone", response_model=FlyPlanPathResponse, tags=["path"])
+def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID")):
+    """根据无人机ID获取计划飞行的航线信息
+
+    Args:
+        drone_id: 无人机ID
+
+    Returns:
+        包含航线信息的响应，格式为：
+        {
+            "flyPathInfos": [
+                {
+                    "id": 'A1',
+                    "color": 'yellow',
+                    "path": [
+                        { "lon": 119.99, "lat": 30.27, "height": 50, "time": '2025-02-01 10:00:00' },
+                        { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
+                        // 更多路径点...
+                    ],
+                    "isMaster": false,
+                }
+            ]
+        }
+    """
+    try:
+        # 根据drone_id返回固定的航线数据
+        # 定义固定的数据集
+        fixed_path = {
+            "id": 'C3',
+            "path": [
+                {"lon": 119.98, "lat": 30.268, "height": 50, "time": '2025-02-01 09:59:58'},
+                {"lon": 119.9824, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05'},
+                {"lon": 119.9944, "lat": 30.2745, "height": 70, "time": '2025-02-01 10:00:08'},
+                {"lon": 119.997, "lat": 30.2764, "height": 80, "time": '2025-02-01 10:00:15'},
+                {"lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20'},
+                {"lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30'},
+            ],
+            "isMaster": True,
+        }
+
+
+        return FlyPlanPathResponse(flyPathInfo=fixed_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取计划飞行航线失败: {e}")
+
+
+@app.post("/drone-nofly-risk-analysis", tags=["analysis"])
+def analyze_drone_risk(
+    drone_id: str = Query(..., description="无人机ID"),
+    show_pic: bool = Query(False, description="是否生成/显示风险分析图片")
+):
+    """
+    分析无人机飞行风险：调用飞行轨迹和禁飞区接口，计算风险并画图。
+    """
+    try:
+        result = start_analyze_drone_risk(drone_id, show_pic=show_pic)
+        
+        return result
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"风险分析失败: {e}")
 
 
 if __name__ == "__main__":

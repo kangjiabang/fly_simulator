@@ -17,7 +17,9 @@ def get_fly_paths() -> list[dict]:
         ]),
         "altitude": 30,  # 飞行高度
         "speed": 10.0,  # 飞行速度（米/秒）
-        "type": "flight_path"
+        "type": "flight_path",
+        "name": "Flight_Path_001",
+        "path_id": "path_001"
     })
 
     # 示例 2：另一条飞行路线
@@ -31,7 +33,9 @@ def get_fly_paths() -> list[dict]:
         ]),
         "altitude": 35,  # 飞行高度
         "speed": 12.0,  # 飞行速度（米/秒）
-        "type": "flight_path"
+        "type": "flight_path",
+        "name": "Flight_Path_002",
+        "path_id": "path_002"
     })
 
     paths.append({
@@ -42,7 +46,9 @@ def get_fly_paths() -> list[dict]:
         ]),
         "altitude": 30,
         "speed": 10.0,
-        "type": "flight_path"
+        "type": "flight_path",
+        "name": "Flight_Path_003",
+        "path_id": "path_003"
     })
 
     # -------------------------
@@ -50,13 +56,15 @@ def get_fly_paths() -> list[dict]:
     # 在 (120.0080, 30.2950) 附近与航线1在平面投影上相交
     paths.append({
         "geometry": LineString([
-            (120.0060, 30.2950, 32),
-            (120.0080, 30.2950, 32),
-            (120.0100, 30.2950, 32),
+            (120.0060, 30.2950, 35),
+            (120.0080, 30.2950, 36),
+            (120.0100, 30.2950, 37),
         ]),
         "altitude": 32,
         "speed": 12.0,
-        "type": "flight_path"
+        "type": "flight_path",
+        "name": "Flight_Path_004",
+        "path_id": "path_004"
     })
 
     # -------------------------
@@ -70,7 +78,9 @@ def get_fly_paths() -> list[dict]:
         ]),
         "altitude": 31,  # 标称高度
         "speed": 8.0,
-        "type": "flight_path"
+        "type": "flight_path",
+        "name": "Flight_Path_005",
+        "path_id": "path_005"
     })
     print(f"加载 {len(paths)} 条飞行路线")
     return paths
