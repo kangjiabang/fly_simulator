@@ -78,19 +78,27 @@ def visualize_collision_analysis(fly_paths, analysis_result):
     
     # 绘制所有飞行路径
     for i, path in enumerate(fly_paths):
-        line = path["geometry"]
+        if "geometry" in path:
+            line = path["geometry"]
+        elif "path" in path:
+            coords = [(p['lon'], p['lat'], p['height']) for p in path["path"]]
+            line = LineString(coords)
+        else:
+            continue
+            
         coords = list(line.coords)
         lons, lats, alts = zip(*coords)
         
         color = colors[i % len(colors)]
-        ax.plot(lons, lats, alts, label=f'Path {i}', color=color, linewidth=2, marker='o', markersize=4)
+        label = path.get("id", f"Path {i}")
+        ax.plot(lons, lats, alts, label=label, color=color, linewidth=2, marker='o', markersize=4)
         
         # 标记起点和终点
         ax.scatter([lons[0]], [lats[0]], [alts[0]], color=color, s=100, alpha=0.7)  # 起点
-        ax.text(lons[0], lats[0], alts[0], f'Start {i}', fontsize=8)
+        ax.text(lons[0], lats[0], lats[0], f'Start {label}', fontsize=8)
         
         ax.scatter([lons[-1]], [lats[-1]], [alts[-1]], color=color, s=100, alpha=0.7)  # 终点
-        ax.text(lons[-1], lats[-1], alts[-1], f'End {i}', fontsize=8)
+        ax.text(lons[-1], lats[-1], alts[-1], f'End {label}', fontsize=8)
     
     # 高亮显示有风险的路径对
     for risk_path in analysis_result['risk_paths']:
@@ -146,13 +154,20 @@ def collision_analyse(fly_paths : list[dict]):
             path2 = fly_paths[j]
             
             # 获取路径的几何形状
-            line1 = path1["geometry"]
-            line2 = path2["geometry"]
+            if "geometry" in path1:
+                line1 = path1["geometry"]
+            else:
+                line1 = LineString([(p['lon'], p['lat'], p['height']) for p in path1["path"]])
+                
+            if "geometry" in path2:
+                line2 = path2["geometry"]
+            else:
+                line2 = LineString([(p['lon'], p['lat'], p['height']) for p in path2["path"]])
             
             # 计算最近距离和最近点
             min_distance, nearest_pt1, nearest_pt2 = find_nearest_points_between_lines(line1, line2)
 
-            print(f"Path {i} and Path {j} min distance: {min_distance:.2f} m")
+            print(f"Path {path1.get('id', i)} and Path {path2.get('id', j)} min distance: {min_distance:.2f} m")
             
             # 根据距离确定风险等级
             risk_level = ""
@@ -179,6 +194,68 @@ def collision_analyse(fly_paths : list[dict]):
 
                 results["risk_paths"].append(risk_path_info)
     
+    return results
+
+
+def collision_analyse_target(current_path: dict, fly_paths : list[dict]):
+    """
+    分析指定路径与周围路径的碰撞风险
+    current_path: 当前无人机路径
+    fly_paths: 周围无人机路径列表
+    """
+    results = {
+        "has_risk": False,
+        "risk_paths": []
+    }
+    
+    # 获取当前路径的几何形状
+    if "geometry" in current_path:
+        line1 = current_path["geometry"]
+    elif "path" in current_path:
+        line1 = LineString([(p['lon'], p['lat'], p['height']) for p in current_path["path"]])
+    else:
+        return results
+
+    # 检查当前路径与列表中的每条路径
+    for i, path2 in enumerate(fly_paths):
+        if "geometry" in path2:
+            line2 = path2["geometry"]
+        elif "path" in path2:
+            line2 = LineString([(p['lon'], p['lat'], p['height']) for p in path2["path"]])
+        else:
+            continue
+        
+        # 计算最近距离和最近点
+        min_distance, nearest_pt1, nearest_pt2 = find_nearest_points_between_lines(line1, line2)
+
+        print(f"Current Path ({current_path.get('id')}) and Path {i} ({path2.get('id')}) min distance: {min_distance:.2f} m")
+        
+        # 根据距离确定风险等级
+        risk_level = ""
+        if min_distance <= 1000:
+            risk_level = "fatal"
+        elif min_distance <= 2000:
+            risk_level = "warn"
+        else:
+            risk_level = "safe"
+            
+        # 如果不是安全等级，则记录风险信息
+        if risk_level != "safe":
+            results["has_risk"] = True
+            risk_path_info = {
+                "target_path_id": current_path.get("id"),
+                "conflict_path_index": i,
+                "conflict_path_id": path2.get("id"), # 假设 path2 可能有 id
+                "min_distance": min_distance,
+                "risk_level": risk_level,
+                "nearest_points": {
+                    "point1": nearest_pt1,
+                    "point2": nearest_pt2
+                }
+            }
+
+            results["risk_paths"].append(risk_path_info)
+            
     return results
 
 

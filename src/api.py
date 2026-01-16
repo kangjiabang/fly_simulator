@@ -14,7 +14,8 @@ if proj_root not in sys.path:
     sys.path.insert(0, proj_root)
 
 from src.service.load_fly_paths import get_fly_paths
-from src.core.fly_path_collision_analyse import collision_analyse, analyze_nofly_zone_risk, visualize_nofly_zone_risk
+from src.service.load_fly_paths import get_surrounding_fly_paths
+from src.core.fly_path_collision_analyse import collision_analyse,collision_analyse_target, analyze_nofly_zone_risk, visualize_nofly_zone_risk
 # Reuse existing planning code
 from src.core.planner_service import compute_flight_path
 from src.tool.BuildingManager import BuildingManager
@@ -206,18 +207,14 @@ def post_collision_analysis():
         raise HTTPException(status_code=500, detail=f"碰撞分析失败: {e}")
 
 
-class FlyPathInfo(BaseModel):
-    id: str
-    path: List[dict]
-    color: str = None
-    isMaster: bool = False
+from src.model.fly_path_info import FlyPathInfo
 
 
 class FlyPathResponse(BaseModel):
     flyPathInfos: List[FlyPathInfo]
 
 class FlyPlanPathResponse(BaseModel):
-    flyPathInfo: FlyPathInfo
+    flyPathInfos: List[FlyPathInfo]
 
 
 @app.get("/fly-paths-by-drone", response_model=FlyPathResponse, tags=["paths"])
@@ -263,6 +260,7 @@ def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"),
                     { "lon": 119.998, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
                     { "lon": 120.0, "lat": 30.28, "height": 100, "time": '2025-02-01 10:00:25' },
                 ],
+                "name": "A1",
                 "isMaster": False,
             },
             {
@@ -276,6 +274,7 @@ def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"),
                     { "lon": 119.9988, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
                     { "lon": 120.02, "lat": 30.283, "height": 100, "time": '2025-02-01 10:00:27' },
                 ],
+                "name": "B2",
                 "isMaster": False,
             },
             {
@@ -288,6 +287,7 @@ def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"),
                     { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20' },
                     { "lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30' },
                 ],
+                "name": "C3",
                 "isMaster": True,
             }
         ]
@@ -307,7 +307,7 @@ def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"),
 
 
 @app.get("/fly-plan-paths-by-drone", response_model=FlyPlanPathResponse, tags=["path"])
-def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID")):
+def get_fly_plan_path_by_drone(drone_id: str = Query(..., description="无人机ID")):
     """根据无人机ID获取计划飞行的航线信息
 
     Args:
@@ -333,21 +333,86 @@ def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"))
     try:
         # 根据drone_id返回固定的航线数据
         # 定义固定的数据集
-        fixed_path = {
-            "id": 'C3',
+        fixed_path = [
+            {
+            "id": "C3",
             "path": [
-                {"lon": 119.98, "lat": 30.268, "height": 50, "time": '2025-02-01 09:59:58'},
-                {"lon": 119.9824, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05'},
-                {"lon": 119.9944, "lat": 30.2745, "height": 70, "time": '2025-02-01 10:00:08'},
-                {"lon": 119.997, "lat": 30.2764, "height": 80, "time": '2025-02-01 10:00:15'},
-                {"lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20'},
-                {"lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30'},
+                { "lon": 119.98, "lat": 30.268, "height": 50, "time": "2025-02-01 09:59:58" },
+                { "lon": 119.9924, "lat": 30.272, "height": 60, "time": "2025-02-01 10:00:05" },
+                { "lon": 119.9944, "lat": 30.2745, "height": 70, "time": "2025-02-01 10:00:08" },
+                { "lon": 119.997, "lat": 30.2764, "height": 80, "time": "2025-02-01 10:00:15" },
+                { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": "2025-02-01 10:00:20" },
+                { "lon": 120.001, "lat": 30.282, "height": 100, "time": "2025-02-01 10:00:30" }
             ],
-            "isMaster": True,
-        }
+            "color": 'yellow',
+            "name": "C3",
+            "isMaster": True
+            },
 
+            {
+            "id": "path_001",
+            "path": [
+                { "lon": 120.0078, "lat": 30.29949, "height": 20, "time": "2025-02-01 10:05:00" },
+                { "lon": 120.0090, "lat": 30.29500, "height": 25, "time": "2025-02-01 10:05:10" },
+                { "lon": 120.0100, "lat": 30.29200, "height": 20, "time": "2025-02-01 10:05:18" },
+                { "lon": 120.01117, "lat": 30.28994, "height": 30, "time": "2025-02-01 10:05:26" }
+            ],
+            "color": "#00ff00",
+            "name": "path_001",
+            "isMaster": False
+            },
 
-        return FlyPlanPathResponse(flyPathInfo=fixed_path)
+            {
+            "id": "path_002",
+            "path": [
+                { "lon": 120.0120, "lat": 30.2900, "height": 25, "time": "2025-02-01 10:06:00" },
+                { "lon": 120.0110, "lat": 30.2920, "height": 30, "time": "2025-02-01 10:06:08" },
+                { "lon": 120.0100, "lat": 30.2950, "height": 35, "time": "2025-02-01 10:06:16" },
+                { "lon": 120.0090, "lat": 30.2980, "height": 40, "time": "2025-02-01 10:06:24" },
+                { "lon": 120.0075, "lat": 30.3000, "height": 35, "time": "2025-02-01 10:06:32" }
+            ],
+            "color": "#00ccff",
+            "name": "path_002",
+            "isMaster": False
+            },
+
+            {
+            "id": "path_003",
+            "path": [
+                { "lon": 120.0080, "lat": 30.3000, "height": 30, "time": "2025-02-01 10:07:00" },
+                { "lon": 120.0080, "lat": 30.2950, "height": 30, "time": "2025-02-01 10:07:12" },
+                { "lon": 120.0080, "lat": 30.2900, "height": 30, "time": "2025-02-01 10:07:24" }
+            ],
+            "color": "#ffaa00",
+            "name": "path_003",
+            "isMaster": False
+            },
+
+            {
+            "id": "path_004",
+            "path": [
+                { "lon": 120.0060, "lat": 30.2950, "height": 35, "time": "2025-02-01 10:08:00" },
+                { "lon": 120.0080, "lat": 30.2950, "height": 36, "time": "2025-02-01 10:08:06" },
+                { "lon": 120.0100, "lat": 30.2950, "height": 37, "time": "2025-02-01 10:08:12" }
+            ],
+            "color": "#ff4444",
+            "name": "path_004",
+            "isMaster": False
+            },
+
+            {
+            "id": "path_005",
+            "path": [
+                { "lon": 120.0100, "lat": 30.2900, "height": 28, "time": "2025-02-01 10:09:00" },
+                { "lon": 120.0085, "lat": 30.2940, "height": 31.5, "time": "2025-02-01 10:09:10" },
+                { "lon": 120.0070, "lat": 30.2980, "height": 35, "time": "2025-02-01 10:09:20" }
+            ],
+            "color": "#bb66ff",
+            "name": "path_005",
+            "isMaster": False
+            }
+    ]
+        return FlyPlanPathResponse(flyPathInfos=fixed_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取计划飞行航线失败: {e}")
 
@@ -361,9 +426,17 @@ def analyze_drone_risk(
     分析无人机飞行风险：调用飞行轨迹和禁飞区接口，计算风险并画图。
     """
     try:
-        result = start_analyze_drone_risk(drone_id, show_pic=show_pic)
+        final_result = {}
+        path_zone_risk_result = start_analyze_drone_risk(drone_id, show_pic=show_pic)
         
-        return result
+        fly_paths = get_surrounding_fly_paths(drone_id)
+        final_result['path_zone_risk'] = path_zone_risk_result
+
+        analysis_result = collision_analyse_target(fly_paths[0],fly_paths[1:])
+
+        final_result['fly_path_risk'] = analysis_result
+
+        return final_result
         
     except Exception as e:
         import traceback

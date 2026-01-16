@@ -1,86 +1,90 @@
-from shapely import box, LineString
+from shapely import box
+
+
+def get_surrounding_fly_paths(drone_id: str) -> list[dict]:
+    """
+    定义无人机飞行路线（示例）
+    """
+    paths = [
+        {
+            "id": "path_001",
+            "path": [
+                { "lon": 120.0078, "lat": 30.29949, "height": 20, "time": "2025-02-01 10:05:00" },
+                { "lon": 120.0090, "lat": 30.29500, "height": 25, "time": "2025-02-01 10:05:10" },
+                { "lon": 120.0100, "lat": 30.29200, "height": 20, "time": "2025-02-01 10:05:18" },
+                { "lon": 120.01117, "lat": 30.28994, "height": 30, "time": "2025-02-01 10:05:26" }
+            ],
+            "name": "path_001",
+            "isMaster": False
+        },
+        {
+            "id": "path_002",
+            "path": [
+                { "lon": 120.0120, "lat": 30.2900, "height": 25, "time": "2025-02-01 10:06:00" },
+                { "lon": 120.0110, "lat": 30.2920, "height": 30, "time": "2025-02-01 10:06:08" },
+                { "lon": 120.0100, "lat": 30.2950, "height": 35, "time": "2025-02-01 10:06:16" },
+                { "lon": 120.0090, "lat": 30.2980, "height": 40, "time": "2025-02-01 10:06:24" },
+                { "lon": 120.0075, "lat": 30.3000, "height": 35, "time": "2025-02-01 10:06:32" }
+            ],
+            "name": "path_002",
+            "isMaster": False
+        },
+        {
+            "id": "path_003",
+            "path": [
+                { "lon": 120.0080, "lat": 30.3000, "height": 30, "time": "2025-02-01 10:07:00" },
+                { "lon": 120.0080, "lat": 30.2950, "height": 30, "time": "2025-02-01 10:07:12" },
+                { "lon": 120.0080, "lat": 30.2900, "height": 30, "time": "2025-02-01 10:07:24" }
+            ],
+            "name": "path_003",
+            "isMaster": False
+        },
+        {
+            "id": "path_004",
+            "path": [
+                { "lon": 120.0060, "lat": 30.2950, "height": 35, "time": "2025-02-01 10:08:00" },
+                { "lon": 120.0080, "lat": 30.2950, "height": 36, "time": "2025-02-01 10:08:06" },
+                { "lon": 120.0100, "lat": 30.2950, "height": 37, "time": "2025-02-01 10:08:12" }
+            ],
+            "name": "path_004",
+            "isMaster": False
+        },
+        {
+            "id": "C3",
+            "path": [
+                { "lon": 119.98, "lat": 30.268, "height": 50, "time": "2025-02-01 09:59:58" },
+                { "lon": 119.9924, "lat": 30.272, "height": 60, "time": "2025-02-01 10:00:05" },
+                { "lon": 119.9944, "lat": 30.2745, "height": 70, "time": "2025-02-01 10:00:08" },
+                { "lon": 119.997, "lat": 30.2764, "height": 80, "time": "2025-02-01 10:00:15" },
+                { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": "2025-02-01 10:00:20" },
+                { "lon": 120.001, "lat": 30.282, "height": 100, "time": "2025-02-01 10:00:30" }
+            ],
+            "name": "C3",
+            "isMaster": True
+        }
+    ]
+    
+    # Sort so that if a drone_id matches, it's at the front or handled specifically if needed
+    # But for now, just return them. 
+    # The original implementation had some prints and returned all paths.
+    
+    # If the user wants specific drone_id handling, we can add it.
+    # In api.py: fly_paths = get_surrounding_fly_paths(drone_id)
+    # analysis_result = collision_analyse_target(fly_paths[0], fly_paths[1:])
+    # This implies the first path should be the target path.
+    
+    # Let's ensure the matching drone_id is at index 0.
+    matched = [p for p in paths if p["id"] == drone_id]
+    others = [p for p in paths if p["id"] != drone_id]
+    
+    result = matched + others
+    print(f"加载 {len(result)} 条飞行路线")
+    return result
 
 
 def get_fly_paths() -> list[dict]:
     """
     定义无人机飞行路线（示例）
     """
-    paths = []
-
-    # 示例 1：一条飞行路线
-    paths.append({
-        "geometry": LineString([
-            (120.0078, 30.29949, 20),  # 起点
-            (120.0090, 30.29500, 25),  # 中间点1
-            (120.0100, 30.29200, 20),  # 中间点2
-            (120.01117, 30.28994, 30), # 终点
-        ]),
-        "altitude": 30,  # 飞行高度
-        "speed": 10.0,  # 飞行速度（米/秒）
-        "type": "flight_path",
-        "name": "Flight_Path_001",
-        "path_id": "path_001"
-    })
-
-    # 示例 2：另一条飞行路线
-    paths.append({
-        "geometry": LineString([
-            (120.01200, 30.29000, 25),  # 起点
-            (120.01100, 30.29200, 30),  # 中间点1
-            (120.01000, 30.29500, 35),  # 中间点2
-            (120.00900, 30.29800, 40),  # 中间点3
-            (120.00750, 30.30000, 35),  # 终点
-        ]),
-        "altitude": 35,  # 飞行高度
-        "speed": 12.0,  # 飞行速度（米/秒）
-        "type": "flight_path",
-        "name": "Flight_Path_002",
-        "path_id": "path_002"
-    })
-
-    paths.append({
-        "geometry": LineString([
-            (120.0080, 30.3000, 30),
-            (120.0080, 30.2950, 30),
-            (120.0080, 30.2900, 30),
-        ]),
-        "altitude": 30,
-        "speed": 10.0,
-        "type": "flight_path",
-        "name": "Flight_Path_003",
-        "path_id": "path_003"
-    })
-
-    # -------------------------
-    # 航线 2：由西向东交叉（高度 32m，横切航线1）
-    # 在 (120.0080, 30.2950) 附近与航线1在平面投影上相交
-    paths.append({
-        "geometry": LineString([
-            (120.0060, 30.2950, 35),
-            (120.0080, 30.2950, 36),
-            (120.0100, 30.2950, 37),
-        ]),
-        "altitude": 32,
-        "speed": 12.0,
-        "type": "flight_path",
-        "name": "Flight_Path_004",
-        "path_id": "path_004"
-    })
-
-    # -------------------------
-    # 航线 3：对角线飞行（高度 28m -> 35m，斜向爬升）
-    # 从东南向西北穿过前两条航线构成的区域
-    paths.append({
-        "geometry": LineString([
-            (120.0100, 30.2900, 28),
-            (120.0085, 30.2940, 31.5),
-            (120.0070, 30.2980, 35),
-        ]),
-        "altitude": 31,  # 标称高度
-        "speed": 8.0,
-        "type": "flight_path",
-        "name": "Flight_Path_005",
-        "path_id": "path_005"
-    })
-    print(f"加载 {len(paths)} 条飞行路线")
-    return paths
+    # Simply reuse surrounding paths with a dummy ID or just return the whole list
+    return get_surrounding_fly_paths("C3")

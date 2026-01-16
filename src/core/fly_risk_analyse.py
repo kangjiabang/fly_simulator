@@ -43,6 +43,7 @@ def start_analyze_drone_risk(drone_id: str, show_pic: bool = False):
                 {"lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20'},
                 {"lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30'},
             ],
+            "name": 'C3',
             "isMaster": True,
         }
         
