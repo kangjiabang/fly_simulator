@@ -13,8 +13,7 @@ proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if proj_root not in sys.path:
     sys.path.insert(0, proj_root)
 
-from src.service.load_fly_paths import get_fly_paths
-from src.service.load_fly_paths import get_surrounding_fly_paths
+from src.service.load_fly_paths import get_fly_paths, get_surrounding_fly_paths, get_current_fly_path
 from src.core.fly_path_collision_analyse import collision_analyse,collision_analyse_target, analyze_nofly_zone_risk, visualize_nofly_zone_risk
 # Reuse existing planning code
 from src.core.planner_service import compute_flight_path
@@ -192,14 +191,14 @@ def get_fly_paths_endpoint():
 
 
 @app.post("/collision-analysis", tags=["analysis"])
-def post_collision_analysis():
+def post_collision_analysis(drone_id: str = Query("C3", description="无人机ID")):
     """分析飞行路线碰撞风险
     
     Returns:
         碰撞分析结果，包含风险等级、风险路线和最近点位信息
     """
     try:
-        fly_paths = get_fly_paths()
+        fly_paths = get_fly_paths(drone_id)
         analysis_result = collision_analyse(fly_paths)
         
         return analysis_result
@@ -214,7 +213,7 @@ class FlyPathResponse(BaseModel):
     flyPathInfos: List[FlyPathInfo]
 
 class FlyPlanPathResponse(BaseModel):
-    flyPathInfos: List[FlyPathInfo]
+    flyPathInfo: FlyPathInfo
 
 
 @app.get("/fly-paths-by-drone", response_model=FlyPathResponse, tags=["paths"])
@@ -248,49 +247,51 @@ def get_fly_path_by_drone(drone_id: str = Query(..., description="无人机ID"),
         fly_path_infos = []
         
         # 定义固定的数据集
-        fixed_paths = [
-            {
-                "id": 'A1',
-                "color": 'yellow',
-                "path": [
-                    { "lon": 119.99, "lat": 30.27, "height": 50, "time": '2025-02-01 10:00:00' },
-                    { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
-                    { "lon": 119.994, "lat": 30.274, "height": 70, "time": '2025-02-01 10:00:10' },
-                    { "lon": 119.997, "lat": 30.276, "height": 80, "time": '2025-02-01 10:00:15' },
-                    { "lon": 119.998, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
-                    { "lon": 120.0, "lat": 30.28, "height": 100, "time": '2025-02-01 10:00:25' },
-                ],
-                "name": "A1",
-                "isMaster": False,
-            },
-            {
-                "id": 'B2',
-                "color": 'cyan',
-                "path": [
-                    { "lon": 119.994, "lat": 30.273, "height": 50, "time": '2025-02-01 10:00:02' },
-                    { "lon": 119.9925, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:07' },
-                    { "lon": 119.995, "lat": 30.274, "height": 70, "time": '2025-02-01 10:00:09' },
-                    { "lon": 119.9975, "lat": 30.276, "height": 80, "time": '2025-02-01 10:00:12' },
-                    { "lon": 119.9988, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
-                    { "lon": 120.02, "lat": 30.283, "height": 100, "time": '2025-02-01 10:00:27' },
-                ],
-                "name": "B2",
-                "isMaster": False,
-            },
-            {
-                "id": 'C3',
-                "path": [
-                    { "lon": 119.98, "lat": 30.268, "height": 50, "time": '2025-02-01 09:59:58' },
-                    { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
-                    { "lon": 119.9944, "lat": 30.2745, "height": 70, "time": '2025-02-01 10:00:08' },
-                    { "lon": 119.997, "lat": 30.2764, "height": 80, "time": '2025-02-01 10:00:15' },
-                    { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20' },
-                    { "lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30' },
-                ],
-                "name": "C3",
-                "isMaster": True,
-            }
-        ]
+        # fixed_paths = [
+        #     {
+        #         "id": 'A1',
+        #         "color": 'yellow',
+        #         "path": [
+        #             { "lon": 119.99, "lat": 30.27, "height": 50, "time": '2025-02-01 10:00:00' },
+        #             { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
+        #             { "lon": 119.994, "lat": 30.274, "height": 70, "time": '2025-02-01 10:00:10' },
+        #             { "lon": 119.997, "lat": 30.276, "height": 80, "time": '2025-02-01 10:00:15' },
+        #             { "lon": 119.998, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
+        #             { "lon": 120.0, "lat": 30.28, "height": 100, "time": '2025-02-01 10:00:25' },
+        #         ],
+        #         "name": "A1",
+        #         "isMaster": False,
+        #     },
+        #     {
+        #         "id": 'B2',
+        #         "color": 'cyan',
+        #         "path": [
+        #             { "lon": 119.994, "lat": 30.273, "height": 50, "time": '2025-02-01 10:00:02' },
+        #             { "lon": 119.9925, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:07' },
+        #             { "lon": 119.995, "lat": 30.274, "height": 70, "time": '2025-02-01 10:00:09' },
+        #             { "lon": 119.9975, "lat": 30.276, "height": 80, "time": '2025-02-01 10:00:12' },
+        #             { "lon": 119.9988, "lat": 30.278, "height": 90, "time": '2025-02-01 10:00:20' },
+        #             { "lon": 120.02, "lat": 30.283, "height": 100, "time": '2025-02-01 10:00:27' },
+        #         ],
+        #         "name": "B2",
+        #         "isMaster": False,
+        #     },
+        #     {
+        #         "id": 'C3',
+        #         "path": [
+        #             { "lon": 119.98, "lat": 30.268, "height": 50, "time": '2025-02-01 09:59:58' },
+        #             { "lon": 119.9924, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05' },
+        #             { "lon": 119.9944, "lat": 30.2745, "height": 70, "time": '2025-02-01 10:00:08' },
+        #             { "lon": 119.997, "lat": 30.2764, "height": 80, "time": '2025-02-01 10:00:15' },
+        #             { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20' },
+        #             { "lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30' },
+        #         ],
+        #         "name": "C3",
+        #         "isMaster": True,
+        #     }
+        # ]
+
+        fixed_paths = get_fly_paths(drone_id)
 
         # 是否返回全部航线
         if include_surrounding:
@@ -333,86 +334,18 @@ def get_fly_plan_path_by_drone(drone_id: str = Query(..., description="无人机
     try:
         # 根据drone_id返回固定的航线数据
         # 定义固定的数据集
-        fixed_path = [
-            {
+        plan_path = {
             "id": "C3",
             "path": [
-                { "lon": 119.98, "lat": 30.268, "height": 50, "time": "2025-02-01 09:59:58" },
-                { "lon": 119.9924, "lat": 30.272, "height": 60, "time": "2025-02-01 10:00:05" },
-                { "lon": 119.9944, "lat": 30.2745, "height": 70, "time": "2025-02-01 10:00:08" },
+                { "lon": 119.98, "lat": 30.266, "height": 50, "time": "2025-02-01 09:59:58" },
+                { "lon": 119.9924, "lat": 30.273, "height": 60, "time": "2025-02-01 10:00:05" },
+                { "lon": 119.9944, "lat": 30.2744, "height": 70, "time": "2025-02-01 10:00:08" },
                 { "lon": 119.997, "lat": 30.2764, "height": 80, "time": "2025-02-01 10:00:15" },
                 { "lon": 119.9983, "lat": 30.2782, "height": 90, "time": "2025-02-01 10:00:20" },
                 { "lon": 120.001, "lat": 30.282, "height": 100, "time": "2025-02-01 10:00:30" }
-            ],
-            "color": 'yellow',
-            "name": "C3",
-            "isMaster": True
-            },
+            ]}
 
-            {
-            "id": "path_001",
-            "path": [
-                { "lon": 120.0078, "lat": 30.29949, "height": 20, "time": "2025-02-01 10:05:00" },
-                { "lon": 120.0090, "lat": 30.29500, "height": 25, "time": "2025-02-01 10:05:10" },
-                { "lon": 120.0100, "lat": 30.29200, "height": 20, "time": "2025-02-01 10:05:18" },
-                { "lon": 120.01117, "lat": 30.28994, "height": 30, "time": "2025-02-01 10:05:26" }
-            ],
-            "color": "#00ff00",
-            "name": "path_001",
-            "isMaster": False
-            },
-
-            {
-            "id": "path_002",
-            "path": [
-                { "lon": 120.0120, "lat": 30.2900, "height": 25, "time": "2025-02-01 10:06:00" },
-                { "lon": 120.0110, "lat": 30.2920, "height": 30, "time": "2025-02-01 10:06:08" },
-                { "lon": 120.0100, "lat": 30.2950, "height": 35, "time": "2025-02-01 10:06:16" },
-                { "lon": 120.0090, "lat": 30.2980, "height": 40, "time": "2025-02-01 10:06:24" },
-                { "lon": 120.0075, "lat": 30.3000, "height": 35, "time": "2025-02-01 10:06:32" }
-            ],
-            "color": "#00ccff",
-            "name": "path_002",
-            "isMaster": False
-            },
-
-            {
-            "id": "path_003",
-            "path": [
-                { "lon": 120.0080, "lat": 30.3000, "height": 30, "time": "2025-02-01 10:07:00" },
-                { "lon": 120.0080, "lat": 30.2950, "height": 30, "time": "2025-02-01 10:07:12" },
-                { "lon": 120.0080, "lat": 30.2900, "height": 30, "time": "2025-02-01 10:07:24" }
-            ],
-            "color": "#ffaa00",
-            "name": "path_003",
-            "isMaster": False
-            },
-
-            {
-            "id": "path_004",
-            "path": [
-                { "lon": 120.0060, "lat": 30.2950, "height": 35, "time": "2025-02-01 10:08:00" },
-                { "lon": 120.0080, "lat": 30.2950, "height": 36, "time": "2025-02-01 10:08:06" },
-                { "lon": 120.0100, "lat": 30.2950, "height": 37, "time": "2025-02-01 10:08:12" }
-            ],
-            "color": "#ff4444",
-            "name": "path_004",
-            "isMaster": False
-            },
-
-            {
-            "id": "path_005",
-            "path": [
-                { "lon": 120.0100, "lat": 30.2900, "height": 28, "time": "2025-02-01 10:09:00" },
-                { "lon": 120.0085, "lat": 30.2940, "height": 31.5, "time": "2025-02-01 10:09:10" },
-                { "lon": 120.0070, "lat": 30.2980, "height": 35, "time": "2025-02-01 10:09:20" }
-            ],
-            "color": "#bb66ff",
-            "name": "path_005",
-            "isMaster": False
-            }
-    ]
-        return FlyPlanPathResponse(flyPathInfos=fixed_path)
+        return FlyPlanPathResponse(flyPathInfo=plan_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取计划飞行航线失败: {e}")
 
@@ -426,13 +359,14 @@ def analyze_drone_risk(
     分析无人机飞行风险：调用飞行轨迹和禁飞区接口，计算风险并画图。
     """
     try:
-        final_result = {}
-        path_zone_risk_result = start_analyze_drone_risk(drone_id, show_pic=show_pic)
-        
+        current_fly_path = get_current_fly_path(drone_id)
         fly_paths = get_surrounding_fly_paths(drone_id)
+        final_result = {}
+        path_zone_risk_result = start_analyze_drone_risk(current_fly_path,drone_id, show_pic=show_pic)
+        
         final_result['path_zone_risk'] = path_zone_risk_result
 
-        analysis_result = collision_analyse_target(fly_paths[0],fly_paths[1:])
+        analysis_result = collision_analyse_target(current_fly_path,fly_paths)
 
         final_result['fly_path_risk'] = analysis_result
 
@@ -442,6 +376,8 @@ def analyze_drone_risk(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"风险分析失败: {e}")
+
+
 
 
 if __name__ == "__main__":

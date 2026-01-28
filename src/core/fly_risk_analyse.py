@@ -26,32 +26,17 @@ def draw_pic(drone_id, path_data, result):
 
     
 @profile_each_line
-def start_analyze_drone_risk(drone_id: str, show_pic: bool = False):
+def start_analyze_drone_risk(fly_path: dict,drone_id: str, show_pic: bool = False):
     """
     分析无人机飞行风险：调用飞行轨迹和禁飞区接口，计算风险并画图。
     """
     try:
-        # 1. 获取飞行轨迹 (模拟调用 /fly-plan-paths-by-drone)
-        # 这里直接使用同样的硬编码数据，保证逻辑一致
-        path_data = {
-            "id": 'C3',
-            "path": [
-                {"lon": 119.98, "lat": 30.268, "height": 50, "time": '2025-02-01 09:59:58'},
-                {"lon": 119.9824, "lat": 30.272, "height": 60, "time": '2025-02-01 10:00:05'},
-                {"lon": 119.9944, "lat": 30.2745, "height": 70, "time": '2025-02-01 10:00:08'},
-                {"lon": 119.997, "lat": 30.2764, "height": 80, "time": '2025-02-01 10:00:15'},
-                {"lon": 119.9983, "lat": 30.2782, "height": 90, "time": '2025-02-01 10:00:20'},
-                {"lon": 120.001, "lat": 30.282, "height": 100, "time": '2025-02-01 10:00:30'},
-            ],
-            "name": 'C3',
-            "isMaster": True,
-        }
-        
+
         # 2. 获取禁飞区 (调用 get_nofly_zones)
         zones = get_nofly_zones()
         
         # 3. 分析风险
-        result = analyze_nofly_zone_risk(path_data["path"], zones)
+        result = analyze_nofly_zone_risk(fly_path["path"], zones)
 
         #del result["zone_info"]
         
@@ -59,7 +44,7 @@ def start_analyze_drone_risk(drone_id: str, show_pic: bool = False):
         saved_path = None
         if show_pic:
             # 使用绝对路径保存，确保能找到
-            saved_path = draw_pic(drone_id, path_data, result)
+            saved_path = draw_pic(drone_id, fly_path, result)
         
         # # 5. 清理结果中的不可序列化对象
         sanitized_result = result.copy()
